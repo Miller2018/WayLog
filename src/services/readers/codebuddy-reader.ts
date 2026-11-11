@@ -220,11 +220,15 @@ export class CodeBuddyReader implements ChatHistoryReader {
                 }
             }
 
-            // Map session ID to creation time
+            // Map session ID to creation time and the IDE-assigned conversation name
             const sessionTimestamps = new Map<string, number>();
+            const sessionNames = new Map<string, string>();
             if (projectIndex && projectIndex.conversations) {
                 for (const conv of projectIndex.conversations) {
                     sessionTimestamps.set(conv.id, new Date(conv.createdAt).getTime());
+                    if (conv.name) {
+                        sessionNames.set(conv.id, conv.name);
+                    }
                 }
             }
 
@@ -246,7 +250,7 @@ export class CodeBuddyReader implements ChatHistoryReader {
 
                     sessions.push({
                         id: `${path.basename(projectPath)}/${sessionDir}`, // Unique ID: MD5/SessionID
-                        title: this.generateTitle(messages),
+                        title: sessionNames.get(sessionDir) || this.generateTitle(messages),
                         description: `${messages.length} messages`,
                         timestamp: creationTime,
                         lastUpdatedAt: stats.mtimeMs,
