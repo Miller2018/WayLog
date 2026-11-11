@@ -18,12 +18,11 @@ export interface FixtureSession {
     messages: FixtureMessage[];
 }
 
-export function createProjectHistory(
-    root: string,
+export function createProjectHistoryAt(
+    projectDir: string,
     conversations: FixtureConversation[],
     sessions: FixtureSession[]
 ): string {
-    const projectDir = path.join(root, 'a'.repeat(32));
     fs.mkdirSync(projectDir, { recursive: true });
 
     fs.writeFileSync(path.join(projectDir, 'index.json'), JSON.stringify({
@@ -61,4 +60,12 @@ export function createProjectHistory(
     }
 
     return projectDir;
+}
+
+export function createProjectHistory(
+    root: string,
+    conversations: FixtureConversation[],
+    sessions: FixtureSession[]
+): string {
+    return createProjectHistoryAt(path.join(root, 'a'.repeat(32)), conversations, sessions);
 }

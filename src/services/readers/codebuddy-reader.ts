@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -7,7 +6,13 @@ import { ChatHistoryReader, ChatSession, ChatMessage, WorkspaceInfo } from './ty
 import { Logger } from '../../utils/logger';
 import { PlatformPaths } from '../../utils/platform-paths';
 import { ConfigurationManager } from '../../config/configuration';
-import { discoverHistoryRoots } from './codebuddy-paths';
+import {
+    discoverHistoryRoots,
+    getWorkspaceKeyCandidates,
+    findProjectDirectories,
+    findChildProjectDirectories,
+    isProjectDirectory
+} from './codebuddy-paths';
 import { filterHistoryPathsByChannel, IdeEnvironment } from './codebuddy-channel';
 
 interface CodeBuddyProjectIndex {
@@ -42,6 +47,7 @@ export class CodeBuddyReader implements ChatHistoryReader {
     public readonly extensionId = 'tencent-cloud.coding-copilot';
     private initPromise: Promise<void> | null = null;
     private historyPaths: string[] = [];
+    private projectDirsByPath = new Map<string, string[]>();
 
     constructor() {
         // Lightweight initialization - no I/O here
@@ -82,10 +88,6 @@ export class CodeBuddyReader implements ChatHistoryReader {
         }
     }
 
-    private getProjectHash(projectPath: string): string {
-        return crypto.createHash('md5').update(projectPath).digest('hex');
-    }
-
     async isAvailable(): Promise<boolean> {
         await this.ensureInitialized();
         return this.historyPaths.length > 0;
@@ -93,104 +95,68 @@ export class CodeBuddyReader implements ChatHistoryReader {
 
     async getWorkspaces(): Promise<WorkspaceInfo[]> {
         await this.ensureInitialized();
-        // Use a map to store the best workspace found for each MD5 hash
-        // Key: MD5 hash, Value: WorkspaceInfo
-        const workspaceMap = new Map<string, WorkspaceInfo>();
 
-        // 1. Map current VS Code workspaces
-        if (vscode.workspace.workspaceFolders) {
-            for (const folder of vscode.workspace.workspaceFolders) {
-                const fsPath = folder.uri.fsPath;
-                const md5 = this.getProjectHash(fsPath);
+        const folders = vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath) || [];
+        const rootPath = folders[0] || vscode.workspace.rootPath;
+        if (!rootPath) {
+            return [];
+        }
 
-                // Check if this MD5 exists in any of the known history paths
-                for (const historyPath of this.historyPaths) {
-                    const projectHistoryPath = path.join(historyPath, md5);
-                    if (fs.existsSync(projectHistoryPath) && fs.statSync(projectHistoryPath).isDirectory()) {
-
-                        // Count chats in this specific project
-                        const sessions = await this.getSessions(projectHistoryPath);
-
-                        const newWs: WorkspaceInfo = {
-                            id: `codebuddy-${md5}`,
-                            name: `CodeBuddy (${folder.name})`,
-                            path: fsPath, // This matches the VS Code workspace path for AutoSync
-                            dbPath: projectHistoryPath, // This points to the actual data folder
-                            lastModified: sessions.length > 0 ? Math.max(...sessions.map(s => s.timestamp)) : Date.now(),
-                            chatCount: sessions.length,
-                            source: this.name
-                        };
-
-                        // Logic: Since CodeBuddy creates shadow folders in 'default' with 0 chats,
-                        // and real data in '{uuid}' folders. We might encounter the same MD5 multiple times.
-                        // We always want to keep the one that actually has chats.
-                        const existing = workspaceMap.get(md5);
-                        if (!existing || newWs.chatCount > existing.chatCount) {
-                            workspaceMap.set(md5, newWs);
-                        }
-                    }
-                }
+        const workspacePaths = folders.length > 0 ? folders : [rootPath];
+        const keys = new Set<string>();
+        for (const workspacePath of workspacePaths) {
+            for (const key of getWorkspaceKeyCandidates(workspacePath)) {
+                keys.add(key);
             }
         }
 
-        const workspaces: WorkspaceInfo[] = Array.from(workspaceMap.values());
-
-        // 2. Also return raw discovered workspaces (existing logic)
-        // These won't match AutoSync for current project, but good for listing in UI
-        for (const historyPath of this.historyPaths) {
-            const parts = historyPath.split(path.sep);
-            const vscodeIndex = parts.lastIndexOf('VSCode');
-            const ideIndex = parts.lastIndexOf('CodeBuddyIDE');
-            const type = vscodeIndex > -1 ? 'VSCode' : (ideIndex > -1 ? 'IDE' : 'Unknown');
-
-            try {
-                // Determine if this history path was already covered by a mapped workspace
-                // (Optimization: skip if we want, but for now let's keep it simple)
-
-                const sessions = await this.getSessions(historyPath);
-                if (sessions.length > 0) {
-                    workspaces.push({
-                        id: historyPath,
-                        name: `CodeBuddy Raw (${type}) - ${path.basename(path.dirname(path.dirname(historyPath)))}`,
-                        path: historyPath,
-                        lastModified: sessions.length > 0 ? Math.max(...sessions.map(s => s.timestamp)) : 0,
-                        chatCount: sessions.length,
-                        source: this.name
-                    });
-                }
-            } catch (e) {
-                Logger.error(`[CodeBuddyReader] Failed to scan workspace ${historyPath}`, e);
-            }
+        const projectDirs = await findProjectDirectories(this.historyPaths, Array.from(keys));
+        if (projectDirs.length === 0) {
+            Logger.info(`[CodeBuddyReader] No CodeBuddy history found for ${rootPath}`);
+            return [];
         }
 
-        // internal dedup based on ID could be useful, but let's just return all
-        return workspaces.sort((a, b) => b.lastModified - a.lastModified);
+        const dbPath = projectDirs[0];
+        this.projectDirsByPath.set(dbPath, projectDirs);
+        const sessions = await this.getSessions(dbPath);
+
+        return [{
+            id: `codebuddy-${path.basename(dbPath)}`,
+            name: `CodeBuddy (${path.basename(rootPath)})`,
+            path: rootPath,
+            dbPath,
+            lastModified: sessions.length > 0 ? Math.max(...sessions.map(s => s.timestamp)) : Date.now(),
+            chatCount: sessions.length,
+            source: this.name
+        }];
     }
 
     async getSessions(workspacePath: string): Promise<ChatSession[]> {
         const sessions: ChatSession[] = [];
 
-        // Determine if workspacePath is a specific project (MD5) or a history root
-        // MD5 is 32 hex chars. history root is named 'history'.
-        const isProjectDir = /^[a-f0-9]{32}$/i.test(path.basename(workspacePath));
-
         try {
-            if (isProjectDir) {
-                await this.scanProjectDir(workspacePath, sessions);
-            } else {
-                // Assume it's a history root containing project directories
-                const projectDirs = fs.readdirSync(workspacePath);
-                for (const projectDir of projectDirs) {
-                    const projectPath = path.join(workspacePath, projectDir);
-                    if (!fs.statSync(projectPath).isDirectory()) continue;
-                    await this.scanProjectDir(projectPath, sessions);
-                }
+            const merged = this.projectDirsByPath.get(workspacePath);
+            const projectDirs = merged || (await isProjectDirectory(workspacePath)
+                ? [workspacePath]
+                : await findChildProjectDirectories(workspacePath));
+
+            for (const projectDir of projectDirs) {
+                await this.scanProjectDir(projectDir, sessions);
             }
         } catch (e) {
             Logger.error(`[CodeBuddyReader] Failed to read sessions from ${workspacePath}`, e);
         }
 
-        return sessions.sort((a, b) => b.timestamp - a.timestamp);
+        // The same conversation can exist in several history roots (old/new
+        // layouts or both product channels); keep its freshest copy.
+        const unique = new Map<string, ChatSession>();
+        for (const session of sessions) {
+            const existing = unique.get(session.id);
+            if (!existing || (session.lastUpdatedAt || 0) > (existing.lastUpdatedAt || 0)) {
+                unique.set(session.id, session);
+            }
+        }
+        return Array.from(unique.values()).sort((a, b) => b.timestamp - a.timestamp);
     }
 
     private async scanProjectDir(projectPath: string, sessions: ChatSession[]) {

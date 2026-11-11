@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -63,4 +64,80 @@ export async function discoverHistoryRoots(
 
     await Promise.all(dataRoots.map(root => walk(root, 0)));
     return Array.from(found);
+}
+
+/**
+ * Compute the directory names CodeBuddy may use for a workspace.
+ * The original absolute path wins; case, drive letter and separator variants
+ * are fallbacks for Windows hosts that report paths differently.
+ */
+export function getWorkspaceKeyCandidates(workspacePath: string): string[] {
+    const trimmed = workspacePath.replace(/[\\/]+$/, '');
+    const variants = new Set<string>([
+        workspacePath,
+        trimmed,
+        path.normalize(workspacePath)
+    ]);
+
+    if (/^[a-zA-Z]:[\\/]/.test(trimmed)) {
+        variants.add(trimmed[0].toLowerCase() + trimmed.slice(1));
+        variants.add(trimmed[0].toUpperCase() + trimmed.slice(1));
+    }
+    variants.add(trimmed.replace(/\//g, '\\'));
+    variants.add(trimmed.replace(/\\/g, '/'));
+
+    const keys = new Set<string>();
+    for (const variant of variants) {
+        keys.add(crypto.createHash('md5').update(variant).digest('hex'));
+    }
+    return Array.from(keys);
+}
+
+/** A real project directory has a project-level index with conversations. */
+export async function isProjectDirectory(directory: string): Promise<boolean> {
+    try {
+        const stats = await fs.stat(directory);
+        if (!stats.isDirectory()) {
+            return false;
+        }
+        const raw = await fs.readFile(path.join(directory, 'index.json'), 'utf8');
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed.conversations);
+    } catch {
+        return false;
+    }
+}
+
+export async function findProjectDirectories(historyRoots: string[], keys: string[]): Promise<string[]> {
+    const found: string[] = [];
+    for (const historyRoot of historyRoots) {
+        for (const key of keys) {
+            const directory = path.join(historyRoot, key);
+            if (!found.includes(directory) && await isProjectDirectory(directory)) {
+                found.push(directory);
+            }
+        }
+    }
+    return found;
+}
+
+export async function findChildProjectDirectories(historyRoot: string): Promise<string[]> {
+    let entries;
+    try {
+        entries = await fs.readdir(historyRoot, { withFileTypes: true });
+    } catch {
+        return [];
+    }
+
+    const found: string[] = [];
+    for (const entry of entries) {
+        if (!entry.isDirectory() && !entry.isSymbolicLink()) {
+            continue;
+        }
+        const directory = path.join(historyRoot, entry.name);
+        if (await isProjectDirectory(directory)) {
+            found.push(directory);
+        }
+    }
+    return found;
 }
