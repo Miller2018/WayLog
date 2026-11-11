@@ -6,6 +6,9 @@ import * as path from 'path';
 import { ChatHistoryReader, ChatSession, ChatMessage, WorkspaceInfo } from './types';
 import { Logger } from '../../utils/logger';
 import { PlatformPaths } from '../../utils/platform-paths';
+import { ConfigurationManager } from '../../config/configuration';
+import { discoverHistoryRoots } from './codebuddy-paths';
+import { filterHistoryPathsByChannel, IdeEnvironment } from './codebuddy-channel';
 
 interface CodeBuddyProjectIndex {
     conversations: {
@@ -45,55 +48,39 @@ export class CodeBuddyReader implements ChatHistoryReader {
     }
 
     private async ensureInitialized(): Promise<void> {
-        if (this.historyPaths.length > 0) return;
-
-        // Return existing promise if initialization is already in progress
+        if (this.historyPaths.length > 0) {
+            return;
+        }
         if (this.initPromise) {
             return this.initPromise;
         }
 
-        // Start initialization
+        const settings = ConfigurationManager.getSettings();
+        const roots = PlatformPaths.getCodeBuddyDataPaths();
+        const env: IdeEnvironment = {
+            appName: vscode.env.appName,
+            uriScheme: vscode.env.uriScheme,
+            appRoot: vscode.env.appRoot
+        };
+
         this.initPromise = (async () => {
-            const baseDir = PlatformPaths.getCodeBuddyDataPath();
-            try {
-                await fs.promises.access(baseDir);
-                await this.findHistoryDirsAsync(baseDir);
-                Logger.debug(`[CodeBuddyReader] Found ${this.historyPaths.length} history directories`);
-            } catch (error) {
-                // Directory doesn't exist or not accessible, just ignore
-                // We don't log error here to avoid noise for users who don't have CodeBuddy
-            }
+            const discovered = await discoverHistoryRoots(roots);
+            this.historyPaths = filterHistoryPathsByChannel(discovered, settings.codeBuddyChannel, env);
+            Logger.info(`[CodeBuddyReader] Found ${this.historyPaths.length} history directories (${settings.codeBuddyChannel} channel)`);
         })();
 
-        return this.initPromise;
-    }
-
-    private async findHistoryDirsAsync(currentDir: string, depth = 0) {
-        if (depth > 6) return;
-
         try {
-            const files = await fs.promises.readdir(currentDir);
-
-            // Use Promise.all to scan subdirectories in parallel
-            await Promise.all(files.map(async (file) => {
-                const fullPath = path.join(currentDir, file);
-                try {
-                    const stat = await fs.promises.stat(fullPath);
-
-                    if (stat.isDirectory()) {
-                        if (file === 'history') {
-                            this.historyPaths.push(fullPath);
-                        } else {
-                            // avoid scanning huge node_modules or similar if any
-                            await this.findHistoryDirsAsync(fullPath, depth + 1);
-                        }
-                    }
-                } catch { }
-            }));
-        } catch (e) { }
+            await this.initPromise;
+        } catch (error) {
+            this.initPromise = null;
+            Logger.error('[CodeBuddyReader] Failed to discover history directories', error);
+        } finally {
+            // CodeBuddy may create its history folder after extension startup.
+            if (this.historyPaths.length === 0) {
+                this.initPromise = null;
+            }
+        }
     }
-
-
 
     private getProjectHash(projectPath: string): string {
         return crypto.createHash('md5').update(projectPath).digest('hex');
