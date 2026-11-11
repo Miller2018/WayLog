@@ -62,7 +62,9 @@ export class CodeBuddyReader implements ChatHistoryReader {
         }
 
         const settings = ConfigurationManager.getSettings();
-        const roots = PlatformPaths.getCodeBuddyDataPaths();
+        const roots = settings.codeBuddyDataPaths.length > 0
+            ? settings.codeBuddyDataPaths
+            : PlatformPaths.getCodeBuddyDataPaths();
         const env: IdeEnvironment = {
             appName: vscode.env.appName,
             uriScheme: vscode.env.uriScheme,
@@ -70,6 +72,12 @@ export class CodeBuddyReader implements ChatHistoryReader {
         };
 
         this.initPromise = (async () => {
+            if (settings.codeBuddyHistoryDir) {
+                this.historyPaths = [settings.codeBuddyHistoryDir];
+                Logger.info(`[CodeBuddyReader] Using configured history directory: ${settings.codeBuddyHistoryDir}`);
+                return;
+            }
+
             const discovered = await discoverHistoryRoots(roots);
             this.historyPaths = filterHistoryPathsByChannel(discovered, settings.codeBuddyChannel, env);
             Logger.info(`[CodeBuddyReader] Found ${this.historyPaths.length} history directories (${settings.codeBuddyChannel} channel)`);
@@ -102,7 +110,10 @@ export class CodeBuddyReader implements ChatHistoryReader {
             return [];
         }
 
-        const workspacePaths = folders.length > 0 ? folders : [rootPath];
+        const settings = ConfigurationManager.getSettings();
+        const workspacePaths = settings.codeBuddyWorkspacePath
+            ? [settings.codeBuddyWorkspacePath]
+            : (folders.length > 0 ? folders : [rootPath]);
         const keys = new Set<string>();
         for (const workspacePath of workspacePaths) {
             for (const key of getWorkspaceKeyCandidates(workspacePath)) {
@@ -110,7 +121,12 @@ export class CodeBuddyReader implements ChatHistoryReader {
             }
         }
 
-        const projectDirs = await findProjectDirectories(this.historyPaths, Array.from(keys));
+        let projectDirs: string[];
+        if (settings.codeBuddyHistoryDir && await isProjectDirectory(settings.codeBuddyHistoryDir)) {
+            projectDirs = [settings.codeBuddyHistoryDir];
+        } else {
+            projectDirs = await findProjectDirectories(this.historyPaths, Array.from(keys));
+        }
         if (projectDirs.length === 0) {
             Logger.info(`[CodeBuddyReader] No CodeBuddy history found for ${rootPath}`);
             return [];
