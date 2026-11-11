@@ -21,9 +21,11 @@ export async function activate(context: vscode.ExtensionContext) {
     waylogService = WayLogService.getInstance(configManager);
     await waylogService.initialize();
 
-    // Start Auto-Save Service
+    // Start Auto-Save Service only when the extension is enabled
     autoSaveService = AutoSaveService.getInstance(context);
-    autoSaveService.start();
+    if (ConfigurationManager.getSettings().enable) {
+        autoSaveService.start();
+    }
 
     // Register Commands
     registerCommands(context);

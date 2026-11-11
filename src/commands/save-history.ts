@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { Logger } from '../utils/logger';
+import { ConfigurationManager } from '../config/configuration';
 import { SyncManager } from '../services/readers/sync-manager';
 import { ChatSession } from '../services/readers/types';
 import { findExistingFile, getFileMessageCount, generateFilename } from '../services/waylog-index';
@@ -9,6 +10,12 @@ import { loadSessionContent, formatSessionMarkdown } from '../services/session-u
 
 export async function saveHistoryCommand() {
     try {
+        // Respect the global enable switch before doing any work
+        if (!ConfigurationManager.getSettings().enable) {
+            Logger.info('[Save] WayLog is disabled');
+            return;
+        }
+
         // 0. Pre-check: Must have a workspace open
         const currentWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!currentWorkspace) {

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { Logger } from '../utils/logger';
+import { ConfigurationManager } from '../config/configuration';
 import { WorkspaceMatcher } from '../utils/workspace-matcher';
 import { SyncManager } from './readers/sync-manager';
 import { ChatSession } from './readers/types';
@@ -101,9 +102,9 @@ export class AutoSaveService {
      * Helper to check if sync should run based on configuration
      */
     private shouldRunSync(): boolean {
-        const config = vscode.workspace.getConfiguration('waylog');
-        if (!config.get<boolean>('autoSave', true)) {
-            Logger.debug('[AutoSave] Skipping sync because auto-save is disabled');
+        const settings = ConfigurationManager.getSettings();
+        if (!settings.enable || !settings.autoSave) {
+            Logger.debug('[AutoSave] Skipping sync because WayLog or auto-save is disabled');
             return false;
         }
         return true;
