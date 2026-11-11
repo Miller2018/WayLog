@@ -1,5 +1,6 @@
 import { ChatSession, ChatHistoryReader } from './readers/types';
 import { Logger } from '../utils/logger';
+import { sessionMarkerId } from './waylog-index';
 
 /**
  * Load session content using lazy loading if needed.
@@ -46,6 +47,7 @@ export function formatSessionMarkdown(session: ChatSession): string {
 
     // Simple title without timestamp (Cursor style)
     let header = `# ${session.title}\n`;
+    header += `<!-- waylog-session-id: ${sessionMarkerId(session.id)} -->\n`;
     header += `_Exported on ${exportDate} ${tzString} from ${session.source} via WayLog_\n\n`;
 
     const body = session.messages.map(msg => {

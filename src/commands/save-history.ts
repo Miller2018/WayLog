@@ -5,7 +5,7 @@ import { Logger } from '../utils/logger';
 import { ConfigurationManager } from '../config/configuration';
 import { SyncManager } from '../services/readers/sync-manager';
 import { ChatSession } from '../services/readers/types';
-import { findExistingFile, getFileMessageCount, generateFilename } from '../services/waylog-index';
+import { getFileMessageCount, resolveExportFile } from '../services/waylog-index';
 import { resolveOutputDir } from '../services/export-paths';
 import { loadSessionContent, formatSessionMarkdown } from '../services/session-utils';
 
@@ -255,16 +255,17 @@ async function saveSessionsToWaylog(sessions: ChatSession[]) {
                 continue;
             }
 
-            // Check if file already exists
-            const existingFile = await findExistingFile(session, historyDir);
+            // Resolve this session's own export file
+            const resolution = await resolveExportFile(session, historyDir);
+            const filepath = resolution.filepath;
 
-            if (existingFile) {
+            if (resolution.exists) {
                 // File exists - check if we need to update
-                const fileMessageCount = await getFileMessageCount(existingFile);
+                const fileMessageCount = await getFileMessageCount(filepath);
 
                 if (session.messages.length > fileMessageCount) {
                     // Has new messages - append incrementally
-                    Logger.info(`[Save] Updating ${path.basename(existingFile)}: ${fileMessageCount} → ${session.messages.length} messages`);
+                    Logger.info(`[Save] Updating ${path.basename(filepath)}: ${fileMessageCount} → ${session.messages.length} messages`);
 
                     const newMessages = session.messages.slice(fileMessageCount);
                     const newContent = newMessages.map(msg => {
@@ -319,26 +320,23 @@ async function saveSessionsToWaylog(sessions: ChatSession[]) {
                         return content + '\n---\n';
                     }).join('\n');
 
-                    await fs.appendFile(existingFile, newContent, 'utf8');
+                    await fs.appendFile(filepath, newContent, 'utf8');
                     updated++;
                 }
 
                 // Open the file
-                const doc = await vscode.workspace.openTextDocument(existingFile);
+                const doc = await vscode.workspace.openTextDocument(filepath);
                 await vscode.window.showTextDocument(doc);
                 opened++;
 
-                Logger.info(`[Save] Opened existing file: ${path.basename(existingFile)}`);
+                Logger.info(`[Save] Opened existing file: ${path.basename(filepath)}`);
             } else {
                 // File doesn't exist - export new file
-                const filename = generateFilename(session);
-
                 const content = formatSessionMarkdown(session);
-                const filepath = path.join(historyDir, filename);
                 await fs.writeFile(filepath, content, 'utf8');
 
                 count++;
-                Logger.info(`[Save] Exported ${count}/${sessions.length}: ${filename}`);
+                Logger.info(`[Save] Exported ${count}/${sessions.length}: ${path.basename(filepath)}`);
             }
 
             // Immediately release memory

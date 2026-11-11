@@ -6,7 +6,7 @@ import { ConfigurationManager } from '../config/configuration';
 import { WorkspaceMatcher } from '../utils/workspace-matcher';
 import { SyncManager } from './readers/sync-manager';
 import { ChatSession } from './readers/types';
-import { findExistingFile, getFileMessageCount, generateFilename } from './waylog-index';
+import { getFileMessageCount, resolveExportFile } from './waylog-index';
 import { resolveOutputDir } from './export-paths';
 import { loadSessionContent, formatSessionMarkdown, formatMessages } from './session-utils';
 
@@ -198,15 +198,15 @@ export class AutoSaveService {
             await this.ensureSessionContent(session, workspaceDbPath);
             if (session.messages.length === 0) return 'skipped';
 
-            // 2. Check for existing file
-            const existingFile = await findExistingFile(session, historyDir);
+            // 2. Resolve this session's own export file
+            const resolution = await resolveExportFile(session, historyDir);
 
-            if (!existingFile) {
-                return await this.createNewFile(session, historyDir);
+            if (!resolution.exists) {
+                return await this.createNewFile(session, historyDir, resolution.filepath);
             }
 
             // 3. Incrementally update if there are new messages
-            return await this.appendNewMessages(session, existingFile);
+            return await this.appendNewMessages(session, resolution.filepath);
         } catch (error) {
             Logger.error(`[AutoSave] Error syncing session ${session.id}`, error);
             return 'skipped';
@@ -235,12 +235,10 @@ export class AutoSaveService {
     /**
      * Creates a new file for a session
      */
-    private async createNewFile(session: ChatSession, historyDir: string): Promise<'created'> {
-        const filename = generateFilename(session);
-        const filepath = path.join(historyDir, filename);
+    private async createNewFile(session: ChatSession, historyDir: string, filepath: string): Promise<'created'> {
         const content = formatSessionMarkdown(session);
 
-        Logger.debug(`[AutoSave] Creating new file: ${filename}`);
+        Logger.debug(`[AutoSave] Creating new file: ${path.basename(filepath)}`);
         await fs.mkdir(historyDir, { recursive: true });
         await fs.writeFile(filepath, content, 'utf8');
 

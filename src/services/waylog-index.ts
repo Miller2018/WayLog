@@ -1,5 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import { Logger } from '../utils/logger';
 import { ConfigurationManager } from '../config/configuration';
@@ -102,29 +103,74 @@ export function generateFilename(session: ChatSession, template?: string): strin
     return sanitizeFilename(filename);
 }
 
-/**
- * Find existing exported file for a given session
- * Simply checks if file with expected name exists
- */
-export async function findExistingFile(session: ChatSession, historyDir: string): Promise<string | null> {
-    try {
-        const filename = generateFilename(session);
-        const filepath = path.join(historyDir, filename);
+const SESSION_MARKER = /<!-- waylog-session-id: ([^\s]+) -->/;
 
-        // Check if file exists
+export function sessionMarkerId(sessionId: string): string {
+    return sessionId.replace(/\s+/g, '_').replace(/-->/g, '');
+}
+
+export interface ExportFileResolution {
+    filepath: string;
+    exists: boolean;
+}
+
+async function readSessionId(filepath: string): Promise<string | undefined> {
+    let handle: fs.FileHandle | undefined;
+    try {
+        handle = await fs.open(filepath, 'r');
+        const buffer = Buffer.alloc(512);
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+        const header = buffer.subarray(0, bytesRead).toString('utf8');
+        const match = header.match(SESSION_MARKER);
+        return match ? match[1] : undefined;
+    } catch {
+        return undefined;
+    } finally {
+        await handle?.close();
+    }
+}
+
+/**
+ * Find the export path for a session. Files belonging to a different session
+ * get a short session-id suffix instead of being overwritten or appended to.
+ * Legacy exports without a marker are treated as the current session.
+ */
+export async function resolveExportFile(session: ChatSession, historyDir: string): Promise<ExportFileResolution> {
+    const filename = generateFilename(session);
+    const extension = path.extname(filename) || '.md';
+    const stem = filename.slice(0, filename.length - extension.length);
+    const shortId = crypto.createHash('sha1').update(session.id).digest('hex').slice(0, 8);
+
+    const candidates = [filename, `${stem}-${shortId}${extension}`];
+    for (let index = 2; index < 100; index++) {
+        candidates.push(`${stem}-${shortId}-${index}${extension}`);
+    }
+
+    for (const candidate of candidates) {
+        const filepath = path.join(historyDir, candidate);
         try {
             await fs.access(filepath);
-            const stats = await fs.stat(filepath);
-            Logger.debug(`[WayLog] Found existing file: ${filename} (size: ${stats.size} bytes)`);
-            return filepath;
         } catch {
-            // File doesn't exist or is inaccessible
-            return null;
+            return { filepath, exists: false };
         }
-    } catch (error) {
-        Logger.error('[WayLog] Error finding existing file', error);
-        return null;
+
+        const existingId = await readSessionId(filepath);
+        if (existingId === undefined || existingId === sessionMarkerId(session.id)) {
+            Logger.debug(`[WayLog] Found existing file: ${candidate}`);
+            return { filepath, exists: true };
+        }
     }
+
+    return {
+        filepath: path.join(historyDir, `${stem}-${shortId}-${Date.now()}${extension}`),
+        exists: false
+    };
+}
+
+/** Backwards compatible helper for callers that only need an existing path. */
+export async function findExistingFile(session: ChatSession, historyDir: string): Promise<string | null> {
+    const resolution = await resolveExportFile(session, historyDir);
+    return resolution.exists ? resolution.filepath : null;
 }
 
 /**
