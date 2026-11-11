@@ -12,7 +12,6 @@ import { loadSessionContent, formatSessionMarkdown, formatMessages } from './ses
 export class AutoSaveService {
     private static instance: AutoSaveService | null = null;
     private syncInterval: NodeJS.Timeout | null = null;
-    private readonly SYNC_INTERVAL_MS = 60 * 1000; // 1 minute
 
     private context?: vscode.ExtensionContext;
 
@@ -37,15 +36,16 @@ export class AutoSaveService {
             return;
         }
 
-        Logger.debug('[AutoSave] Starting auto-save service (1 minute interval)');
+        const intervalMs = ConfigurationManager.getSettings().autoSaveIntervalSeconds * 1000;
+        Logger.debug(`[AutoSave] Starting auto-save service (${intervalMs / 1000}s interval)`);
 
         // Run immediately once
         this.syncAllExportedSessions();
 
-        // Then run every minute
+        // Then run on the configured interval
         this.syncInterval = setInterval(() => {
             this.syncAllExportedSessions();
-        }, this.SYNC_INTERVAL_MS);
+        }, intervalMs);
     }
 
     /**
