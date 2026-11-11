@@ -59,6 +59,20 @@ export class AutoSaveService {
         }
     }
 
+    /** Apply new settings immediately (also picks up a changed sync interval). */
+    applySettings(enabled: boolean) {
+        if (enabled) {
+            this.restart();
+        } else {
+            this.stop();
+        }
+    }
+
+    restart() {
+        this.stop();
+        this.start();
+    }
+
 
     /**
      * Sync all exported sessions

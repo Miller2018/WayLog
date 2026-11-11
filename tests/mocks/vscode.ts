@@ -14,8 +14,23 @@ export const workspace = {
         get: jest.fn(),
         update: jest.fn()
     })),
+    onDidChangeConfiguration: jest.fn(() => ({ dispose: jest.fn() })),
     workspaceFolders: [],
     rootPath: '/mock/root'
+};
+
+export const commands = {
+    registerCommand: jest.fn(() => ({ dispose: jest.fn() }))
+};
+
+export const env = {
+    appName: 'Visual Studio Code',
+    uriScheme: 'vscode',
+    appRoot: '/mock/app'
+};
+
+export const extensions = {
+    getExtension: jest.fn()
 };
 
 export const ExtensionContext = jest.fn();
@@ -51,6 +66,9 @@ export const Uri = {
 export default {
     window,
     workspace,
+    commands,
+    env,
+    extensions,
     ExtensionContext,
     EventEmitter,
     ViewColumn,

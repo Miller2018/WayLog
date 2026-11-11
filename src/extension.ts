@@ -30,6 +30,17 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register Commands
     registerCommands(context);
 
+    // React to setting changes without requiring a window reload
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(event => {
+            if (!event.affectsConfiguration('waylog')) {
+                return;
+            }
+            const settings = ConfigurationManager.getSettings();
+            autoSaveService.applySettings(settings.enable && settings.autoSave);
+        })
+    );
+
     // Check Welcome Message
     checkWelcomeMessage(context);
 
