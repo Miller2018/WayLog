@@ -1,6 +1,9 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import { Logger } from '../utils/logger';
+import { ConfigurationManager } from '../config/configuration';
+import { DEFAULT_FILENAME_TEMPLATE } from '../config/waylog-settings';
 import { ChatSession } from './readers/types';
 
 /**
@@ -26,36 +29,77 @@ function slugify(text: string): string {
     return cleanSlug || 'new-chat';
 }
 
+/** Keep Unicode letters and digits while replacing characters unsafe for filenames. */
+export function sanitizeFilenameComponent(value: string, maxLength = 50): string {
+    return Array.from(value)
+        .filter(char => char.charCodeAt(0) >= 32)
+        .map(char => /[\p{L}\p{N}_]/u.test(char) ? char : '_')
+        .join('')
+        .slice(0, maxLength);
+}
+
+/** Sanitize a whole filename, including Windows reserved names. */
+export function sanitizeFilename(filename: string): string {
+    let cleaned = Array.from(filename)
+        .map(char => char.charCodeAt(0) < 32 || /[<>:"/\\|?*]/.test(char) ? '_' : char)
+        .join('')
+        .replace(/[. ]+$/g, '');
+
+    const stem = cleaned.toLowerCase().endsWith('.md') ? cleaned.slice(0, -3) : cleaned;
+    if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(stem)) {
+        cleaned = `_${cleaned}`;
+    }
+    return cleaned;
+}
+
+function generateClaudeFilename(session: ChatSession, date: Date): string {
+    // Format: YYYY-MM-DD_HH-MM-SSZ-claude-{slug}.md (waylog-cli compatible)
+    const timestamp = date.toISOString()
+        .replace(/T/, '_')
+        .replace(/\.\d{3}Z$/, 'Z')
+        .replace(/:/g, '-');
+
+    const firstUserMessage = session.messages.find(m => m.role === 'user');
+    const slug = firstUserMessage
+        ? slugify(firstUserMessage.content)
+        : session.id || 'new-chat';
+
+    return `${timestamp}-claude-${slug}.md`;
+}
+
 /**
- * Generate filename for a session
- * For Claude: Uses waylog-cli compatible format ({timestamp}-claude-{slug}.md)
- * For others: Uses original format ({date}_{time}Z-{title}.md)
+ * Generate a filename from the configured template.
+ * The default template preserves the original formats, including Claude's
+ * waylog-cli compatible name; an explicit template overrides every provider.
  */
-export function generateFilename(session: ChatSession): string {
+export function generateFilename(session: ChatSession, template?: string): string {
     const date = new Date(session.timestamp);
+    const effectiveTemplate = template || ConfigurationManager.getSettings().filenameTemplate;
 
-    // For Claude sessions, use waylog-cli compatible format
-    if (session.source.toLowerCase() === 'claude') {
-        // Format: YYYY-MM-DD_HH-MM-SSZ
-        const timestamp = date.toISOString()
-            .replace(/T/, '_')
-            .replace(/\.\d{3}Z$/, 'Z')
-            .replace(/:/g, '-');
-
-        // Generate slug from first user message content (matches waylog-cli)
-        const firstUserMessage = session.messages.find(m => m.role === 'user');
-        const slug = firstUserMessage
-            ? slugify(firstUserMessage.content)
-            : session.id || 'new-chat';
-
-        return `${timestamp}-claude-${slug}.md`;
+    if (effectiveTemplate === DEFAULT_FILENAME_TEMPLATE && session.source.toLowerCase() === 'claude') {
+        return generateClaudeFilename(session, date);
     }
 
-    // For other providers, keep original format for backward compatibility
-    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
-    const timeStr = date.toISOString().split('T')[1].slice(0, 5).replace(':', '-'); // HH-MM
-    const sanitizedTitle = session.title.replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_').slice(0, 50);
-    return `${dateStr}_${timeStr}Z-${sanitizedTitle}.md`;
+    const iso = date.toISOString();
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const replacements: Array<[string, string]> = [
+        ['{date}', iso.split('T')[0]],
+        ['{time}', iso.split('T')[1].slice(0, 5).replace(':', '-')],
+        ['{title}', sanitizeFilenameComponent(session.title)],
+        ['{source}', sanitizeFilenameComponent(session.source)],
+        ['{workspace}', sanitizeFilenameComponent(workspaceRoot ? path.basename(workspaceRoot) : '')],
+        ['{sessionId}', sanitizeFilenameComponent(session.id, 16)]
+    ];
+
+    let filename = effectiveTemplate;
+    for (const [placeholder, value] of replacements) {
+        filename = filename.split(placeholder).join(value);
+    }
+
+    if (!/\.md$/i.test(filename)) {
+        filename += '.md';
+    }
+    return sanitizeFilename(filename);
 }
 
 /**
