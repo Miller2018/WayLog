@@ -344,6 +344,7 @@ export class CodeBuddyReader implements ChatHistoryReader {
         if (!content) return '';
         let cleaned = content;
         cleaned = cleaned.replace(/<user_info>[\s\S]*?<\/user_info>/g, '');
+        cleaned = cleaned.replace(/<rules>[\s\S]*?<\/rules>/g, '');
         cleaned = cleaned.replace(/<project_context>[\s\S]*?<\/project_context>/g, '');
         cleaned = cleaned.replace(/<project_layout>[\s\S]*?<\/project_layout>/g, '');
         cleaned = cleaned.replace(/<system_reminder>[\s\S]*?<\/system_reminder>/g, '');
