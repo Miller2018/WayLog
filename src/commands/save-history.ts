@@ -6,6 +6,7 @@ import { ConfigurationManager } from '../config/configuration';
 import { SyncManager } from '../services/readers/sync-manager';
 import { ChatSession } from '../services/readers/types';
 import { findExistingFile, getFileMessageCount, generateFilename } from '../services/waylog-index';
+import { resolveOutputDir } from '../services/export-paths';
 import { loadSessionContent, formatSessionMarkdown } from '../services/session-utils';
 
 export async function saveHistoryCommand() {
@@ -214,16 +215,16 @@ async function saveSessionsToWaylog(sessions: ChatSession[]) {
         return;
     }
 
-    const waylogDir = path.join(rootPath, '.waylog');
-    const historyDir = path.join(waylogDir, 'history');
+    const settings = ConfigurationManager.getSettings();
+    const historyDir = resolveOutputDir(settings.outputDir, { workspaceRoot: rootPath });
 
     Logger.info(`[Save] Saving to: ${historyDir}`);
 
     try {
         await fs.mkdir(historyDir, { recursive: true });
     } catch (e) {
-        Logger.error('[Save] Failed to create .waylog/history directory', e);
-        vscode.window.showErrorMessage('Failed to create .waylog/history directory');
+        Logger.error(`[Save] Failed to create history directory: ${historyDir}`, e);
+        vscode.window.showErrorMessage('Failed to create history directory. Check waylog.outputDir.');
         return;
     }
 

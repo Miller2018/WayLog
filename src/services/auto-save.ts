@@ -7,6 +7,7 @@ import { WorkspaceMatcher } from '../utils/workspace-matcher';
 import { SyncManager } from './readers/sync-manager';
 import { ChatSession } from './readers/types';
 import { findExistingFile, getFileMessageCount, generateFilename } from './waylog-index';
+import { resolveOutputDir } from './export-paths';
 import { loadSessionContent, formatSessionMarkdown, formatMessages } from './session-utils';
 
 export class AutoSaveService {
@@ -128,12 +129,13 @@ export class AutoSaveService {
      * Helper to prepare the history directory
      */
     private async prepareHistoryDirectory(workspaceRoot: string): Promise<string | undefined> {
-        const historyDir = path.join(workspaceRoot, '.waylog', 'history');
+        const settings = ConfigurationManager.getSettings();
+        const historyDir = resolveOutputDir(settings.outputDir, { workspaceRoot });
         try {
             await fs.mkdir(historyDir, { recursive: true });
             return historyDir;
         } catch (error) {
-            Logger.error('[AutoSave] Failed to create .waylog/history directory', error);
+            Logger.error(`[AutoSave] Failed to create history directory: ${historyDir}`, error);
             return undefined;
         }
     }
