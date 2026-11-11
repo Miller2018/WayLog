@@ -58,6 +58,50 @@ export class PlatformPaths {
     }
 
     /**
+     * Get all plausible CodeBuddy data roots for the current platform.
+     * The IDE has used both <root>/Data/... and <root>/... layouts, and Linux
+     * installations may follow XDG_DATA_HOME, so callers should probe every root.
+     */
+    static getCodeBuddyDataPaths(): string[] {
+        const home = os.homedir();
+        const candidates: string[] = [];
+        const add = (...segments: string[]) => {
+            const value = path.join(...segments);
+            if (!candidates.includes(value)) {
+                candidates.push(value);
+            }
+        };
+
+        if (process.platform === 'darwin') {
+            const base = path.join(home, 'Library', 'Application Support', 'CodeBuddyExtension');
+            add(base, 'Data');
+            add(base);
+        } else if (process.platform === 'win32') {
+            const localRoots = [process.env.LOCALAPPDATA, path.join(home, 'AppData', 'Local')]
+                .filter((value): value is string => Boolean(value));
+            for (const localRoot of localRoots) {
+                const base = path.join(localRoot, 'CodeBuddyExtension');
+                add(base, 'Data');
+                add(base);
+            }
+        } else if (process.platform === 'linux') {
+            const dataRoots = [process.env.XDG_DATA_HOME, path.join(home, '.local', 'share')]
+                .filter((value): value is string => Boolean(value));
+            for (const dataRoot of dataRoots) {
+                const base = path.join(dataRoot, 'CodeBuddyExtension');
+                add(base, 'Data');
+                add(base);
+            }
+            // Legacy location, still used by older installs and by existing symlinks.
+            add(home, '.codebuddy');
+        } else {
+            add(home, '.codebuddy');
+        }
+
+        return candidates;
+    }
+
+    /**
      * Get all possible VS Code workspace storage directories (both Stable and Insiders)
      * Returns an array of paths to check
      */
