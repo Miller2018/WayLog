@@ -56,12 +56,60 @@
         "waylog.enable": {
           "type": "boolean",
           "default": true,
-          "description": "Enable or disable WayLog extension features."
+          "scope": "window",
+          "description": "Enable or disable all WayLog features."
         },
         "waylog.autoSave": {
           "type": "boolean",
           "default": true,
-          "description": "Enable automatic background saving of chat history (saves to .waylog/history)."
+          "scope": "window",
+          "description": "Enable automatic background saving of chat history."
+        },
+        "waylog.autoSaveInterval": {
+          "type": "number",
+          "default": 60,
+          "minimum": 10,
+          "maximum": 3600,
+          "scope": "window",
+          "description": "Interval in seconds between automatic history syncs."
+        },
+        "waylog.codebuddyChannel": {
+          "type": "string",
+          "enum": ["auto", "VSCode", "CodeBuddyIDE", "all"],
+          "default": "auto",
+          "scope": "window",
+          "description": "Which CodeBuddy product history to read. auto uses only the current IDE (VS Code extension or CodeBuddy IDE); all reads every product channel."
+        },
+        "waylog.codebuddyDataPaths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "window",
+          "description": "Extra CodeBuddy data roots to search. Empty uses the automatically detected platform roots."
+        },
+        "waylog.codebuddyHistoryDir": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "Force a specific CodeBuddy history directory and skip automatic discovery. Empty means auto."
+        },
+        "waylog.codebuddyWorkspacePath": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "Override the workspace path used to locate CodeBuddy history (useful after renaming or in remote setups). Empty means the open workspace."
+        },
+        "waylog.outputDir": {
+          "type": "string",
+          "default": ".waylog/history",
+          "scope": "window",
+          "description": "Directory for exported Markdown files. Relative paths are resolved against the workspace; supports ${workspaceFolder} and {source}/{date} placeholders."
+        },
+        "waylog.filenameTemplate": {
+          "type": "string",
+          "default": "{date}_{time}Z-{title}.md",
+          "scope": "window",
+          "description": "Filename template for exports. Placeholders: {date}, {time}, {title}, {source}, {workspace}, {sessionId}."
         }
       }
     }
