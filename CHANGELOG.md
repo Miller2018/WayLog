@@ -2,6 +2,21 @@
 
 All notable changes to the "WayLog" extension will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Configurable export directory (`waylog.outputDir`) and filename template (`waylog.filenameTemplate`).
+- Configurable auto-save interval; settings take effect without reloading the window.
+- Automatic CodeBuddy history discovery on Linux, Windows and macOS, resolved from the current workspace with IDE product channel selection (`waylog.codebuddyChannel`).
+- Explicit overrides for CodeBuddy data roots, history directory and workspace path.
+- Unit tests for CodeBuddy discovery, channel selection, settings, export paths and filename handling.
+
+### Fixed
+- `waylog.enable` now disables both the manual command and background auto-save.
+- CodeBuddy session titles use the conversation name from `index.json`; injected `<rules>` blocks are stripped.
+- Sessions sharing the same generated filename no longer overwrite each other.
+- Windows `LOCALAPPDATA` fallback and Windows drive-letter/path variants for workspace hashes.
+
 ## [0.0.8] - 2025-12-29
 
 ### Improved

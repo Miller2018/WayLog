@@ -12,7 +12,7 @@ WayLog 是一个**免费、开源、本地优先的扩展**，它能将你转瞬
 
 🌟 **[GitHub 开源](https://github.com/shayne-snap/WayLog)** - 社区驱动开发，透明且值得信赖。
 
-> ❗️ **重要提示**：所有对话历史都保存在工作区的 `.waylog` 文件夹中。
+> ❗️ **重要提示**：所有对话历史默认保存在工作区的 `.waylog` 文件夹中，可通过 `waylog.outputDir` 修改存放位置。
 
 ## ✨ 核心特性
 
@@ -25,7 +25,7 @@ WayLog 是一个**免费、开源、本地优先的扩展**，它能将你转瞬
 - **选择性保存**：使用 `Save AI Chat History` 命令手动选择要保存的特定对话。
 
   ![Selective Saving Demo](demo/selective_save.gif)
-- **跨平台支持**：完全兼容 macOS（Intel 和 Apple Silicon）以及 Windows（x64 和 ARM64）。
+- **跨平台支持**：兼容 macOS（Intel 和 Apple Silicon）、Windows（x64 和 ARM64）以及 Linux，CodeBuddy 历史目录在各平台自动识别。
 
 ## 🔌 支持的 AI 助手
 
@@ -48,12 +48,28 @@ WayLog 开箱即用地支持以下工具：
 2.  **打开工作区**：WayLog 需要一个活动文件夹来保存你的历史记录。
 3.  **自动保存**：WayLog 会在后台自动检查新对话。
 
+## ⚙️ 配置项
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `waylog.enable` | `true` | 总开关，关闭后手动命令与自动保存都不执行。 |
+| `waylog.autoSave` | `true` | 是否启用后台自动保存。 |
+| `waylog.autoSaveInterval` | `60` | 自动保存间隔（秒，10–3600）。 |
+| `waylog.codebuddyChannel` | `auto` | 读取哪类 CodeBuddy 历史：`auto`（仅当前 IDE 产品通道）、`VSCode`、`CodeBuddyIDE`、`all`。 |
+| `waylog.codebuddyDataPaths` | `[]` | 强制指定 CodeBuddy 数据根目录；为空则按平台自动探测。 |
+| `waylog.codebuddyHistoryDir` | `""` | 强制指定某个 `history` 目录（也可直接指定项目目录），跳过自动发现。 |
+| `waylog.codebuddyWorkspacePath` | `""` | 覆盖用于定位历史的工作区路径，适用于目录改名、远程开发等场景。 |
+| `waylog.outputDir` | `.waylog/history` | 导出目录，相对路径以工作区为基准；支持 `${workspaceFolder}`、`{workspace}`、`{source}`、`{date}`、`{year}`、`{month}`。 |
+| `waylog.filenameTemplate` | `{date}_{time}Z-{title}.md` | 文件名模板，占位符：`{date}`、`{time}`、`{title}`、`{source}`、`{workspace}`、`{sessionId}`。 |
+
+CodeBuddy 历史目录会自动识别：Linux 为 `$XDG_DATA_HOME/CodeBuddyExtension/Data` 或 `~/.local/share/CodeBuddyExtension/Data`（兼容旧路径 `~/.codebuddy`），Windows 为 `%LOCALAPPDATA%\CodeBuddyExtension\Data`，macOS 为 `~/Library/Application Support/CodeBuddyExtension/Data`。插件根据当前工作区自动定位对应的会话目录，无需再手工计算哈希、建立软链接。会话名称取自 `index.json` 的真实会话名，导出内容会剔除注入的规则块。
+
 ## 🔒 隐私与数据
 
 WayLog 采用严格的**本地优先**策略。它智能地与已安装 AI 扩展的本地存储进行交互，以只读方式检索对话历史。
 - 我们**不会**修改或删除你的原始对话记录。
 - 所有数据处理完全在你的设备上进行。
-- 你的对话历史直接保存到工作区的 `.waylog` 文件夹，让你完全掌控自己的数据。
+- 你的对话历史保存到配置的输出目录（默认 `.waylog/history`），让你完全掌控自己的数据。
 
 ## 🤝 贡献
 

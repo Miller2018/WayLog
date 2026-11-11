@@ -13,7 +13,7 @@ Stop losing valuable context when you switch IDEs or close a window. WayLog unif
 
 🌟 **[Open Source on GitHub](https://github.com/shayne-snap/WayLog)** - Community-driven development, transparent and trustworthy.
 
-> ❗️ **Important Note**: All chat history is saved locally in the `.waylog` folder within your workspace.
+> ❗️ **Important Note**: All chat history is saved locally in the `.waylog` folder within your workspace by default. Use `waylog.outputDir` to choose another location.
 >
 ## ✨ Key Features
 
@@ -26,7 +26,7 @@ Stop losing valuable context when you switch IDEs or close a window. WayLog unif
 - **Selective Saving**: Manually select specific conversations to save using the `Save AI Chat History` command.
 
   ![Selective Saving Demo](demo/selective_save.gif)
-- **Cross-Platform Support**: Fully compatible with macOS (Intel & Apple Silicon) and Windows (x64 & ARM64).
+- **Cross-Platform Support**: macOS (Intel & Apple Silicon), Windows (x64 & ARM64) and Linux. CodeBuddy history is auto-discovered on each platform.
 
 ## 🔌 Supported AI Assistants
 
@@ -50,13 +50,28 @@ WayLog connects with the following tools out of the box:
 
 3.  **Auto-Save**: WayLog automatically checks for new conversations in the background.
 
+## ⚙️ Settings
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `waylog.enable` | `true` | Master switch for all WayLog features. |
+| `waylog.autoSave` | `true` | Enable background auto-save. |
+| `waylog.autoSaveInterval` | `60` | Seconds between auto-save runs (10–3600). |
+| `waylog.codebuddyChannel` | `auto` | CodeBuddy history to read: `auto` (only the current IDE product channel), `VSCode`, `CodeBuddyIDE`, or `all`. |
+| `waylog.codebuddyDataPaths` | `[]` | Override the CodeBuddy data roots. Empty uses the platform defaults. |
+| `waylog.codebuddyHistoryDir` | `""` | Force one CodeBuddy `history` directory (or one project directory) and skip discovery. |
+| `waylog.codebuddyWorkspacePath` | `""` | Override the workspace path used to locate CodeBuddy history, e.g. after renaming a folder. |
+| `waylog.outputDir` | `.waylog/history` | Export directory. Relative paths are workspace-relative; supports `${workspaceFolder}`, `{workspace}`, `{source}`, `{date}`, `{year}`, `{month}`. |
+| `waylog.filenameTemplate` | `{date}_{time}Z-{title}.md` | Filename template. Placeholders: `{date}`, `{time}`, `{title}`, `{source}`, `{workspace}`, `{sessionId}`. |
+
+CodeBuddy history is discovered automatically on Linux (`$XDG_DATA_HOME/CodeBuddyExtension/Data` or `~/.local/share/CodeBuddyExtension/Data`, plus the legacy `~/.codebuddy`), Windows (`%LOCALAPPDATA%\CodeBuddyExtension\Data`) and macOS. The current workspace selects the correct history folder, so manual hashes and symlinks are no longer needed. Session names come from CodeBuddy's own `index.json`, and injected rule blocks are removed from exports.
 
 ## 🔒 Privacy & Data
 
 WayLog operates with a strict **local-first** policy. It intelligently interfaces with the local storage of your installed AI extensions to retrieve chat history in a read-only manner.
 - We **do not** modify or delete your original chat records.
 - All data processing happens entirely on your devices.
-- Your chat history is saved directly to your workspace's `.waylog` folder, giving you full control over your data.
+- Your chat history is saved to the configured output directory (`.waylog/history` by default), giving you full control over your data.
 
 ## 🤝 Contributing
 

@@ -54,10 +54,14 @@ This document tracks the support status of various AI coding assistants and thei
     *   **Modes**: Supports Chat, Agent, Plan, Debug, and Ask modes.
 
 ### 5. Tencent Cloud CodeBuddy (腾讯云 AI 代码助手)
-*   **Status**: **Supported**
-*   **Mechanism**: Directly reads local JSON history files.
-*   **Data Integrity**: Includes full context and responses.
-*   **Storage Path**: `~/Library/Application Support/CodeBuddyExtension/Data/`
+*   **Status**: **Supported** (VS Code extension and CodeBuddy IDE)
+*   **Mechanism**: Directly reads local JSON history files. History roots are discovered under the platform data directory and matched to the current workspace. `waylog.codebuddyChannel` selects only the current IDE product channel by default, or all channels.
+*   **Data Integrity**: Includes full context and responses; session titles come from `index.json` conversation names and injected rule blocks are removed.
+*   **Storage Paths**:
+    *   macOS: `~/Library/Application Support/CodeBuddyExtension/Data/`
+    *   Linux: `$XDG_DATA_HOME/CodeBuddyExtension/Data/` or `~/.local/share/CodeBuddyExtension/Data/` (legacy `~/.codebuddy` is still probed)
+    *   Windows: `%LOCALAPPDATA%\CodeBuddyExtension\Data\`
+*   **Overrides**: `waylog.codebuddyDataPaths`, `waylog.codebuddyHistoryDir`, `waylog.codebuddyWorkspacePath`
 
 ### 6. Alibaba Cloud Lingma (通义灵码)
 *   **Status**: **Partial Support (Summary Only)**
